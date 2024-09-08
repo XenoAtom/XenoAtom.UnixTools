@@ -2,7 +2,7 @@
 
 <img align="right" width="160px" height="160px" src="https://raw.githubusercontent.com/xoofx/XenoAtom.UnixTools/main/img/XenoAtom.UnixTools.png">
 
-This project provides a set of Unix tools for .NET 8.0+.
+This project provides a set of Unix tools for .NET 8+.
 
 > **Note**: This project is still in early development and the API is subject to change.
 

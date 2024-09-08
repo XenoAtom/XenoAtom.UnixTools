@@ -20,6 +20,4 @@ public sealed class UnixFile : UnixFileSystemEntry
         get => Inode.GetFileContent();
         set => Inode.SetFileContent(value);
     }
-
-    internal override UnixFileSystemEntry CloneWithName(string name) => new UnixFile(name, Inode);
 }

@@ -2,10 +2,7 @@
 // Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
-using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace XenoAtom.UnixTools;
 
@@ -21,36 +18,36 @@ public sealed class UnixMemoryFileSystem
 
     public UnixDirectory RootDirectory { get; }
     
-    public UnixDirectory CreateDirectory(string fullPath)
+    public UnixDirectory CreateDirectory(string fullPath, bool createIntermediateDirectories = true)
     {
         ValidateFullPath(fullPath);
-        return RootDirectory.CreateDirectory(fullPath, true);
+        return RootDirectory.CreateDirectory(fullPath, createIntermediateDirectories);
     }
     
-    public UnixFile CreateFile(string fullPath) => CreateFile(fullPath, UnixFileContent.Empty);
+    public UnixFile CreateFile(string fullPath, bool createIntermediateDirectories = true) => CreateFile(fullPath, UnixFileContent.Empty, createIntermediateDirectories);
 
-    public UnixFile CreateFile(string fullPath, UnixFileContent content)
+    public UnixFile CreateFile(string fullPath, UnixFileContent content, bool createIntermediateDirectories = true)
     {
         ValidateFullPath(fullPath);
-        return RootDirectory.CreateFile(fullPath, content, true);
+        return RootDirectory.CreateFile(fullPath, content, createIntermediateDirectories);
     }
 
-    public UnixDeviceFile CreateDevice(string fullPath, UnixFileKind kind, DeviceId id)
+    public UnixDeviceFile CreateDevice(string fullPath, UnixFileKind kind, DeviceId id, bool createIntermediateDirectories = true)
     {
         ValidateFullPath(fullPath);
-        return RootDirectory.CreateDevice(fullPath, kind, id, true);
+        return RootDirectory.CreateDevice(fullPath, kind, id, createIntermediateDirectories);
     }
 
-    public UnixSymbolicLink CreateSymbolicLink(string fullPath, string target)
+    public UnixSymbolicLink CreateSymbolicLink(string fullPath, string target, bool createIntermediateDirectories = true)
     {
         ValidateFullPath(fullPath);
-        return RootDirectory.CreateSymbolicLink(fullPath, target, true);
+        return RootDirectory.CreateSymbolicLink(fullPath, target, createIntermediateDirectories);
     }
 
-    public TEntry CreateHardLink<TEntry>(string fullPath, TEntry entry) where TEntry : UnixFileSystemEntry
+    public TEntry CreateHardLink<TEntry>(string fullPath, TEntry entry, bool createIntermediateDirectories = true) where TEntry : UnixFileSystemEntry
     {
         ValidateFullPath(fullPath);
-        return RootDirectory.CreateHardLink(fullPath, entry, true);
+        return RootDirectory.CreateHardLink(fullPath, entry, createIntermediateDirectories);
     }
 
     public bool TryGetEntry(string fullPath, [NotNullWhen(true)] out UnixFileSystemEntry? entry)
@@ -64,11 +61,31 @@ public sealed class UnixMemoryFileSystem
         ValidateFullPath(fullPath);
         return RootDirectory.GetEntry(fullPath);
     }
-    
-    private void ValidateFullPath(string fullPath)
+
+    public void DeleteEntry(string fullPath)
+    {
+        ValidateFullPath(fullPath);
+        RootDirectory.DeleteEntry(fullPath);
+    }
+
+    public void CopyEntry(string sourcePath, string destinationPath, UnixCopyMode mode = UnixCopyMode.Single)
+    {
+        ValidateFullPath(sourcePath, nameof(sourcePath));
+        ValidateFullPath(destinationPath, nameof(destinationPath));
+        RootDirectory.CopyEntry(sourcePath, destinationPath, mode);
+    }
+
+    public void MoveEntry(string sourcePath, string destinationPath, bool createIntermediateDirectories = false)
+    {
+        ValidateFullPath(sourcePath, nameof(sourcePath));
+        ValidateFullPath(destinationPath, nameof(destinationPath));
+        RootDirectory.MoveEntry(sourcePath, destinationPath, createIntermediateDirectories);
+    }
+
+    private static void ValidateFullPath(string fullPath, string? paramName = "fullPath")
     {
         ArgumentNullException.ThrowIfNull(fullPath);
-        if (fullPath.Length == 0) throw new ArgumentException("The path cannot be empty", nameof(fullPath));
-        if (!UnixPath.IsPathRooted(fullPath)) throw new ArgumentException("The path must be absolute and start with a `/`", nameof(fullPath));
+        if (fullPath.Length == 0) throw new ArgumentException("The path cannot be empty", paramName);
+        if (!UnixPath.IsPathRooted(fullPath)) throw new ArgumentException("The path must be absolute and start with a `/`", paramName);
     }
 }

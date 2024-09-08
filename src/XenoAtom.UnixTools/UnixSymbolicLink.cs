@@ -28,6 +28,4 @@ public sealed class UnixSymbolicLink : UnixFileSystemEntry
     {
         get => Parent is null ? "<undefined>" : UnixPath.Combine(Parent!.FullPath, Target);
     }
-
-    internal override UnixFileSystemEntry CloneWithName(string name) => new UnixSymbolicLink(name, Inode);
 }

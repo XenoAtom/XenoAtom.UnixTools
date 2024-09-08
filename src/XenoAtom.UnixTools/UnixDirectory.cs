@@ -5,7 +5,6 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.IO.Enumeration;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -26,60 +25,43 @@ public sealed class UnixDirectory : UnixFileSystemEntry
 
     public SortedDictionary<string, UnixFileSystemEntry>.ValueCollection Entries => InternalEntries.Values;
 
-    private SortedDictionary<string, UnixFileSystemEntry> InternalEntries => Inode.GetDictionaryContent();
+    internal SortedDictionary<string, UnixFileSystemEntry> InternalEntries => Inode.GetDictionaryContent();
     
-    public UnixFile CreateFile(string path, bool createDirectory = false)
+    public UnixFile CreateFile(string path, bool createIntermediateDirectories = false)
     {
-        if (!TryGetDirectory(path, createDirectory, true, out var dir, out var name, out var notFoundReason))
-        {
-            throw new ArgumentException(notFoundReason, nameof(path));
-        }
-        
-        var file = new UnixFile(name.ToString(), CreateNode(UnixFileKind.RegularFile));
+        var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
+        var file = new UnixFile(name!, CreateNode(UnixFileKind.RegularFile));
         dir.AddEntry(file);
         return file;
     }
 
-    public UnixFile CreateFile(string path, UnixFileContent content, bool createDirectory = false)
+    public UnixFile CreateFile(string path, UnixFileContent content, bool createIntermediateDirectories = false)
     {
-        if (!TryGetDirectory(path, createDirectory, true, out var dir, out var name, out var notFoundReason))
-        {
-            throw new ArgumentException(notFoundReason, nameof(path));
-        }
-        
+        var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
         var node = CreateNode(UnixFileKind.RegularFile, content.Data);
-        node.Mode = UnixFile.DefaultMode;
-        var file = new UnixFile(name.ToString(), node);
+        var file = new UnixFile(name!, node);
         dir.AddEntry(file);
         return file;
     }
 
-    public UnixDirectory CreateDirectory(string path, bool createDirectory = false) 
+    public UnixDirectory CreateDirectory(string path, bool createIntermediateDirectories = false) 
     {
-        if (!TryGetDirectory(path, createDirectory, true, out var dir, out var name, out var notFoundReason))
-        {
-            throw new ArgumentException(notFoundReason, nameof(path));
-        }
-
+        var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
         var node = CreateNode(UnixFileKind.Directory, new SortedDictionary<string, UnixFileSystemEntry>(StringComparer.Ordinal));
-        node.Mode = DefaultMode;
-        var directory = new UnixDirectory(name.ToString(), node);
+        var directory = new UnixDirectory(name!, node);
         dir.AddEntry(directory);
         return directory;
     }
 
-    public UnixDeviceFile CreateDevice(string path, UnixFileKind kind, DeviceId id, bool createDirectory = false)
+    public UnixDeviceFile CreateDevice(string path, UnixFileKind kind, DeviceId id, bool createIntermediateDirectories = false)
     {
         if (kind != UnixFileKind.CharacterSpecialDevice && kind != UnixFileKind.BlockSpecialDevice)
         {
             throw new ArgumentException("Invalid kind for a device file. Must be either CharacterSpecialDevice or BlockSpecialDevice", nameof(kind));
         }
-        if (!TryGetDirectory(path, createDirectory, true, out var dir, out var name, out var notFoundReason))
-        {
-            throw new ArgumentException(notFoundReason, nameof(path));
-        }
 
-        var device = new UnixDeviceFile(name.ToString(), CreateNode(kind))
+        var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
+        var device = new UnixDeviceFile(name!, CreateNode(kind))
         {
             Device = id
         };
@@ -87,47 +69,45 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return device;
     }
 
-    public UnixSymbolicLink CreateSymbolicLink(string path, string target, bool createDirectory = false)
+    public UnixSymbolicLink CreateSymbolicLink(string path, string target, bool createIntermediateDirectories = false)
     {
-        if (!TryGetDirectory(path, createDirectory, true, out var dir, out var name, out var notFoundReason))
-        {
-            throw new ArgumentException(notFoundReason, nameof(path));
-        }
-
+        var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
         // A symbolic link doesn't check if the target exists
         var node = CreateNode(UnixFileKind.SymbolicLink, target);
-        node.Mode = UnixSymbolicLink.DefaultMode;
-        var link = new UnixSymbolicLink(name.ToString(), node);
+        var link = new UnixSymbolicLink(name!, node);
         dir.AddEntry(link);
         return link;
     }
 
-    public TEntry CreateHardLink<TEntry>(string path, TEntry target, bool createDirectory = false) where TEntry: UnixFileSystemEntry
+    public TEntry CreateHardLink<TEntry>(string path, TEntry target, bool createIntermediateDirectories = false) where TEntry: UnixFileSystemEntry
     {
-        if (!TryGetDirectory(path, createDirectory, true, out var dir, out var name, out var notFoundReason))
-        {
-            throw new ArgumentException(notFoundReason, nameof(path));
-        }
-
-        var link = (TEntry)target.CloneWithName(name.ToString());
-        link.Inode.HardLinkCount++;
+        var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
+        var link = (TEntry)CloneEntry(target, false, newName: name!);
         dir.AddEntry(link);
         return link;
+    }
+
+    public bool ContainsEntry(string path)
+    {
+        return TryGetEntry(path, out _);
     }
 
     public bool TryGetEntry(string path, [NotNullWhen(true)] out UnixFileSystemEntry? entry)
     {
-        if (!TryGetDirectory(path, false, true, out var dir, out var name, out var notFoundReason))
+        var dir = this;
+        var name = path;
+        
+        if (path.Contains('/') && !TryGetDirectory(path, false, true, out dir, out name, out var notFoundReason))
         {
             entry = null;
             return false;
         }
-        
-        return dir.InternalEntries.TryGetValue(name.ToString(), out entry);
+
+        return dir.InternalEntries.TryGetValue(name!, out entry);
     }
 
     public UnixFileSystemEntry this[string path] => GetEntry(path);
-    
+
     public UnixFileSystemEntry GetEntry(string path)
     {
         if (!TryGetEntry(path, out var entry))
@@ -136,38 +116,169 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         }
         return entry;
     }
-    
-    public void RemoveEntry(string path)
+
+    public void CopyEntry(string sourcePath, string destinationPath, UnixCopyMode mode = UnixCopyMode.Single, bool overwrite = false)
     {
-        var entry = GetEntry(path);
-        entry.Parent!.InternalEntries.Remove(entry.Name);
-        
-        if (entry is UnixDirectory directory)
+        VerifyAttached();
+
+        UnixPath.Validate(sourcePath, nameof(sourcePath));
+        UnixPath.Validate(destinationPath, nameof(destinationPath));
+
+        if (!TryGetEntry(sourcePath, out var sourceEntry))
         {
-            foreach (var child in directory.Entries.ToList())
+            throw new ArgumentException($"The source path `{sourcePath}` does not exist in the directory `{Name}`");
+        }
+
+        // For the destination path, go through the root directory to allow copying an entry to any directory
+        destinationPath = UnixPath.Combine(FullPath, UnixPath.Normalize(destinationPath));
+        var fs = FileSystem!;
+
+        if (!fs.RootDirectory.TryGetDirectory(destinationPath, false, true, out var destinationDirectory, out var destinationName, out var notFoundReason))
+        {
+            throw new ArgumentException(notFoundReason, nameof(destinationPath));
+        }
+
+        // Check if the destination entry already exists
+        if (destinationName is not null && destinationDirectory.TryGetEntry(destinationName, out var destinationEntry))
+        {
+            // Don't do anything if the source and destination are the same
+            if (destinationEntry == sourceEntry)
             {
-                directory.RemoveEntry(child.Name);
+                return;
+            }
+
+            if (destinationEntry is UnixDirectory directory)
+            {
+                // If the destination is a directory, we copy the source entry into it
+                destinationDirectory = directory;
+            }
+            else
+            {
+                if (overwrite)
+                {
+                    // If the destination is a file, we delete it
+                    destinationEntry.Delete();
+                }
+                else
+                {
+                    ThrowEntryAlreadyExists(destinationDirectory, destinationName);
+                }
             }
         }
 
-        // Decrement the parent hardlink count if the entry is a directory
-        // because of the implicit `..` entry in the subdirectory
-        if (entry.FileKind == UnixFileKind.Directory)
+        // Copy the source entry to the destination directory
+        bool recursive = mode == UnixCopyMode.Recursive || mode == UnixCopyMode.RecursiveWithHardLinks || mode == UnixCopyMode.Archive;
+        if (sourceEntry is UnixDirectory && recursive)
         {
-            Inode.HardLinkCount--;
+            bool copy = mode != UnixCopyMode.RecursiveWithHardLinks;
+            var mapping = mode == UnixCopyMode.Archive ? new Dictionary<UnixInode, UnixInode>() : null;
+
+            var subEntries = new List<UnixFileSystemEntry>();
+            var stack = new Stack<(UnixFileSystemEntry Source, UnixDirectory DestinationDirectory, string DestinationName)>();
+            stack.Push((sourceEntry, destinationDirectory, destinationName ?? sourceEntry.Name));
+
+            while (stack.Count > 0)
+            {
+                var (source, destination, destName) = stack.Pop();
+
+                if (destination.ContainsEntry(destName))
+                {
+                    ThrowEntryAlreadyExists(destination, destName);
+                }
+
+                if (source is UnixDirectory directory)
+                {
+                    var newDestinationDirectory = (UnixDirectory)CloneEntry(directory, true, newName: destName);
+                    destination.AddEntry(newDestinationDirectory);
+
+                    subEntries.Clear();
+                    foreach (var subEntry in directory.Entries)
+                    {
+                        subEntries.Add(subEntry);
+                    }
+
+                    // Push the sub entries in reverse order to keep the order when popping
+                    for (int i = subEntries.Count - 1; i >= 0; i--)
+                    {
+                        var child = subEntries[i];
+                        stack.Push((child, newDestinationDirectory, child.Name));
+                    }
+                }
+                else
+                {
+                    var clone = CloneEntry(source, copy, mapping, newName: destName);
+                    destination.AddEntry(clone);
+                }
+            }
+        }
+        else
+        {
+            var copy = CloneEntry(sourceEntry, true, newName: destinationName ?? sourceEntry.Name);
+            destinationDirectory.AddEntry(copy);
+        }
+    }
+
+    public void MoveEntry(string sourcePath, string destinationPath, bool createIntermediateDirectories = false, bool overwrite = false)
+    {
+        VerifyAttached();
+
+        UnixPath.Validate(sourcePath, nameof(sourcePath));
+        UnixPath.Validate(destinationPath, nameof(destinationPath));
+        
+        if (!TryGetEntry(sourcePath, out var sourceEntry))
+        {
+            throw new ArgumentException($"The source path `{sourcePath}` does not exist in the directory `{Name}`");
         }
 
-        entry.Parent = null;
-        entry.FileSystem = null;
+        // For the destination path, go through the root directory to allow moving an entry to any directory
+        destinationPath = UnixPath.Combine(FullPath, UnixPath.Normalize(destinationPath));
+        var fileSystem = FileSystem!;
 
-        // Decrease the hard link count
-        entry.Inode.HardLinkCount--;
-
-        // If the hard link count is 0 or 1 (for directory), the node is not used anymore, so we can remove the inode from the filesystem
-        if (entry.Inode.HardLinkCount == 0 || (entry.FileKind == UnixFileKind.Directory && entry.Inode.HardLinkCount == 1))
+        // Fetch the destination directory
+        if (!fileSystem.RootDirectory.TryGetDirectory(destinationPath, createIntermediateDirectories, true, out var destinationDirectory, out var destinationName, out var notFoundReason))
         {
-            entry.Inode.HardLinkCount = 0;
+            throw new ArgumentException(notFoundReason, nameof(destinationPath));
         }
+
+        // Check if the destination entry already exists
+        if (destinationDirectory.TryGetEntry(destinationName!, out var destinationEntry))
+        {
+            // Don't do anything if the source and destination are the same
+            if (destinationEntry == sourceEntry)
+            {
+                return;
+            }
+            
+            if (destinationEntry is UnixDirectory directory)
+            {
+                // If the destination is a directory, we move the source entry into it
+                destinationDirectory = directory;
+            }
+            else
+            {
+                if (overwrite)
+                {
+                    // If the destination is a file, we delete it
+                    destinationEntry.Delete();
+                }
+                else
+                {
+                    ThrowEntryAlreadyExists(destinationDirectory, destinationName!);
+                }
+            }
+        }
+
+        sourceEntry.SetParent(destinationDirectory, destinationName!);
+    }
+
+    public void DeleteEntry(string path)
+    {
+        var entry = GetEntry(path);
+        if (entry is UnixDirectory directory && directory.IsRoot)
+        {
+            throw new InvalidOperationException("Cannot delete the root folder");
+        }
+        entry.SetParent(null);
     }
 
     public IEnumerable<UnixFileSystemEntry> EnumerateFileSystemEntries(SearchOption searchOption = SearchOption.TopDirectoryOnly)
@@ -197,7 +308,11 @@ public sealed class UnixDirectory : UnixFileSystemEntry
 
     public IEnumerable<UnixFileSystemEntry> EnumerateFileSystemEntries(string searchPattern, SearchOption searchOption = SearchOption.TopDirectoryOnly)
     {
-        foreach (var entry in Entries)
+        // Make a copy (to allow adding/removing entries while iterating)
+        var entries = new List<UnixFileSystemEntry>(Entries.Count);
+        entries.AddRange(Entries);
+
+        foreach (var entry in entries)
         {
             if (FileSystemName.MatchesSimpleExpression(searchPattern, entry.Name, false))
             {
@@ -216,7 +331,12 @@ public sealed class UnixDirectory : UnixFileSystemEntry
 
     private IEnumerable<UnixFileSystemEntry> EnumerateFileSystemEntriesRecursive()
     {
-        foreach (var entry in Entries)
+        // Make a copy (to allow adding/removing entries while iterating)
+
+        var entries = new List<UnixFileSystemEntry>(Entries.Count);
+        entries.AddRange(Entries);
+
+        foreach (var entry in entries)
         {
             yield return entry;
             if (entry is UnixDirectory directory)
@@ -232,22 +352,51 @@ public sealed class UnixDirectory : UnixFileSystemEntry
     private void AddEntry(UnixFileSystemEntry entry)
     {
         Debug.Assert(entry is not null);
-        if (!InternalEntries.TryAdd(entry.Name, entry))
-        {
-            throw new ArgumentException($"An entry with the name `{entry.Name}` already exists in the directory `{FullPath}`");
-        }
-        entry.Parent = this;
-        entry.FileSystem = FileSystem;
-
-        // Increment the parent hardlink count if the entry is a directory
-        // because of the implicit `..` entry in the subdirectory
-        if (entry.FileKind == UnixFileKind.Directory)
-        {
-            Inode.HardLinkCount++;
-        }
+        entry.SetParent(this);
     }
 
-    private bool TryGetDirectory(string path, bool createDirectory, bool skipLastEntry, out UnixDirectory currentDirectory, out ReadOnlySpan<char> lastName, [NotNullWhen(false)] out string? notFoundReason)
+    private static UnixFileSystemEntry CloneEntry(UnixFileSystemEntry entry, bool copy, Dictionary<UnixInode, UnixInode>? mapping = null, string? newName = null)
+    {
+        UnixInode newInode;
+        newName ??= entry.Name;
+
+        if (copy)
+        {
+            // When copying and we are respecting mapping, we need to check if the inode has already been copied
+            if (mapping is not null && mapping.TryGetValue(entry.Inode, out var tempNode))
+            {
+                newInode = tempNode;
+            }
+            else
+            {
+                // Otherwise, we make a copy of the inode
+                newInode = entry.Inode.CreateCopy(entry.FileSystem!);
+            }
+        }
+        else
+        {
+            // Clone the inode without copying the content
+            newInode = entry.Inode;
+        }
+        
+        UnixFileSystemEntry newEntry = entry.FileKind switch
+        {
+            UnixFileKind.Directory => new UnixDirectory(newName, newInode),
+            UnixFileKind.RegularFile => new UnixFile(newName, newInode),
+            UnixFileKind.SymbolicLink => new UnixSymbolicLink(newName, newInode),
+            UnixFileKind.CharacterSpecialDevice or UnixFileKind.BlockSpecialDevice => new UnixDeviceFile(newName, newInode),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        if (copy && mapping is not null)
+        {
+            mapping.TryAdd(entry.Inode, newEntry.Inode);
+        }
+
+        return newEntry;
+    }
+    
+    private bool TryGetDirectory(string path, bool createIntermediateDirectories, bool skipLastEntry, [NotNullWhen(true)] out UnixDirectory? currentDirectory, out string? lastName, [NotNullWhen(false)] out string? notFoundReason)
     {
         VerifyAttached();
         ValidatePath(path);
@@ -257,7 +406,7 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         var targetPath = UnixPath.Normalize(UnixPath.Combine(fullPath, normalizedRelativePath)).AsSpan();
 
         currentDirectory = this;
-        lastName = default;
+        lastName = null;
         notFoundReason = null;
 
         // We only accept relative path
@@ -287,9 +436,9 @@ public sealed class UnixDirectory : UnixFileSystemEntry
                 Debug.Assert(length > 0); // This should have been fixed by UnixPath.Normalize
 
                 var spanName = targetPath.Slice(offset, length);
-                lastName = spanName;
 
                 var name = spanName.ToString();
+                lastName = name;
 
                 var isLastEntry = i == rangeCount - 1;
                 if (currentDirectory.InternalEntries.TryGetValue(name, out var entry))
@@ -310,7 +459,7 @@ public sealed class UnixDirectory : UnixFileSystemEntry
                 }
                 else
                 {
-                    if (createDirectory && (!skipLastEntry || !isLastEntry))
+                    if (createIntermediateDirectories && (!skipLastEntry || !isLastEntry))
                     {
                         var directory = currentDirectory.CreateDirectory(name);
                         currentDirectory = directory;
@@ -338,7 +487,7 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return true;
     }
     
-    private void ValidatePath(string path)
+    private static void ValidatePath(string path)
     {
         UnixPath.Validate(path);
         if (path.Length == 0) throw new ArgumentException("Path cannot be empty", nameof(path));
@@ -348,14 +497,48 @@ public sealed class UnixDirectory : UnixFileSystemEntry
     {
         VerifyAttached();
         var fileSystem = FileSystem!;
-        var node = new UnixInode(fileSystem.NextInodeIndex++, kind, data)
+        var node = new UnixInode(fileSystem.NextInodeIndex++, kind, data);
+        node.Mode = kind switch
         {
-            HardLinkCount = kind == UnixFileKind.Directory ? 2U : 1,
+            UnixFileKind.Directory => DefaultMode,
+            UnixFileKind.RegularFile => UnixFile.DefaultMode,
+            UnixFileKind.SymbolicLink => UnixSymbolicLink.DefaultMode,
+            UnixFileKind.CharacterSpecialDevice => UnixFile.DefaultMode,
+            UnixFileKind.BlockSpecialDevice => UnixFile.DefaultMode,
+            _ => node.Mode
         };
+
         return node;
     }
 
-    internal override UnixFileSystemEntry CloneWithName(string name) => new UnixDirectory(name, Inode);
+    private (UnixDirectory directory, string name) ResolveEntryForCreate(string path, bool createIntermediateDirectories = false)
+    {
+        ValidatePath(path);
+
+        UnixDirectory? dir = this;
+        string? name = path;
+
+        if (name.Contains('/'))
+        {
+            if (!TryGetDirectory(path, createIntermediateDirectories, true, out dir, out name, out var notFoundReason))
+            {
+                throw new ArgumentException(notFoundReason, nameof(path));
+            }
+        }
+
+        if (dir.InternalEntries.ContainsKey(name!))
+        {
+            throw new ArgumentException($"An entry with the name `{name}` already exists in the directory `{dir.FullPath}`");
+        }
+
+        return (dir, name!);
+    }
+
+    [DoesNotReturn]
+    private void ThrowEntryAlreadyExists(UnixDirectory directory, string name)
+    {
+        throw new ArgumentException($"An entry with the name `{name}` already exists in the directory `{directory.FullPath}`");
+    }
 
     internal static UnixDirectory CreateRoot(UnixMemoryFileSystem fs)
     {
@@ -370,4 +553,5 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         };
         return root;
     }
+
 }

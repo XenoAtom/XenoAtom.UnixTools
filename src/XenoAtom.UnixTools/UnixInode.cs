@@ -114,4 +114,38 @@ public sealed class UnixInode
         Debug.Assert(FileKind == UnixFileKind.CharacterSpecialDevice || FileKind == UnixFileKind.BlockSpecialDevice);
         _deviceId = id;
     }
+
+    internal UnixInode CreateCopy(UnixMemoryFileSystem fs)
+    {
+        object? content = FileKind switch
+        {
+            UnixFileKind.Directory => new SortedDictionary<string, UnixFileSystemEntry>(), // Create an empty directory (will be copied later)
+            UnixFileKind.RegularFile => GetFileContent().CreateCopy().Data,
+            UnixFileKind.SymbolicLink => GetSymbolicLinkTarget(),
+            UnixFileKind.CharacterSpecialDevice => null,
+            UnixFileKind.BlockSpecialDevice => null,
+            _ => throw new ArgumentOutOfRangeException()
+        };
+        
+        var copy = new UnixInode(fs.NextInodeIndex++, FileKind, content)
+        {
+            Mode = Mode,
+            Uid = Uid,
+            Gid = Gid,
+            CreationTime = CreationTime,
+            LastChangedTime = LastChangedTime,
+            LastAccessTime = LastAccessTime,
+            LastModifiedTime = LastModifiedTime,
+            Dev = Dev,
+            HardLinkCount = 0 // Reset the hard link count
+        };
+
+        // Copy the DeviceId if it is a device
+        if (FileKind == UnixFileKind.CharacterSpecialDevice || FileKind == UnixFileKind.BlockSpecialDevice)
+        {
+            copy.SetDeviceId(GetDeviceId());
+        }
+        
+        return copy;
+    }
 }

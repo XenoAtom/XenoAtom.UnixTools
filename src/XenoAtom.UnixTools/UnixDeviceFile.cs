@@ -18,6 +18,4 @@ public sealed class UnixDeviceFile : UnixFileSystemEntry
         get => Inode.GetDeviceId();
         set => Inode.SetDeviceId(value);
     }
-
-    internal override UnixFileSystemEntry CloneWithName(string name) => new UnixDeviceFile(name, Inode);
 }

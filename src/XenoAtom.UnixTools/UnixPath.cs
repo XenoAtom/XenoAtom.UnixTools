@@ -19,12 +19,74 @@ public static class UnixPath
         return NormalizeInternal(path);
     }
 
+    /// <summary>Returns the directory information for the specified path represented by a character span.</summary>
+    /// <param name="path">The path to retrieve the directory information from.</param>
+    /// <returns>Directory information for <paramref name="path" />, or an empty span if <paramref name="path" /> is <see langword="null" />, an empty span, or a root (such as \, C:, or \\server\share).</returns>
+    public static ReadOnlySpan<char> GetDirectoryName(ReadOnlySpan<char> path)
+    {
+        if (path.IsEmpty) return path;
+        int directoryNameOffset = GetDirectoryNameOffset(path);
+        return directoryNameOffset < 0 ? ReadOnlySpan<char>.Empty : path.Slice(0, directoryNameOffset);
+    }
+
+    internal static int GetDirectoryNameOffset(ReadOnlySpan<char> path)
+    {
+        int end = path.Length;
+        if (end <= 0)
+            return -1;
+
+        while (end > 0 && !IsDirectorySeparator(path[--end]))
+        {
+        }
+
+        // Trim off any remaining separators (to deal with C:\foo\\bar)
+        while (end > 0 && IsDirectorySeparator(path[end - 1]))
+        {
+            end--;
+        }
+
+        return end;
+    }
+    
+    public static ReadOnlySpan<char> GetFileName(ReadOnlySpan<char> path)
+    {
+        int index = path.LastIndexOf('/');
+        return index < 0 ? path : path.Slice(index + 1);
+    }
+    
+    public static ReadOnlySpan<char> GetFileNameWithoutExtension(ReadOnlySpan<char> path)
+    {
+        ReadOnlySpan<char> fileName = GetFileName(path);
+        int length = fileName.LastIndexOf('.');
+        return length < 0 ? fileName : fileName.Slice(0, length);
+    }
+    
+    public static ReadOnlySpan<char> GetExtension(ReadOnlySpan<char> path)
+    {
+        int length = path.Length;
+        for (int index = length - 1; index >= 0; --index)
+        {
+            char c = path[index];
+            if (c == '.')
+                return index != length - 1 ? path.Slice(index, length - index) : ReadOnlySpan<char>.Empty;
+            if (IsDirectorySeparator(c))
+                break;
+        }
+        return ReadOnlySpan<char>.Empty;
+    }
+
     public static void Validate(string path) => Validate(path, nameof(path));
 
     public static void Validate(string path, string paramName)
     {
         ArgumentNullException.ThrowIfNull(path, paramName);
 
+        if (ContainsInvalidCharacters(path))
+            throw new ArgumentException("Invalid null char found in path", paramName);
+    }
+
+    public static void Validate(ReadOnlySpan<char> path, string paramName)
+    {
         if (ContainsInvalidCharacters(path))
             throw new ArgumentException("Invalid null char found in path", paramName);
     }
@@ -261,5 +323,87 @@ public static class UnixPath
         }
 
         return true;
+    }
+
+    public static string GetRelativePath(string sourcePath, string childFullPath)
+    {
+        Validate(sourcePath, nameof(sourcePath));
+        Validate(childFullPath, nameof(childFullPath));
+
+        if (sourcePath.Length == 0 || childFullPath.Length == 0)
+        {
+            return childFullPath;
+        }
+
+        if (sourcePath == childFullPath)
+        {
+            return ".";
+        }
+
+        if (sourcePath.Length == 1 && IsDirectorySeparator(sourcePath[0]))
+        {
+            return childFullPath;
+        }
+
+        if (childFullPath.Length == 1 && IsDirectorySeparator(childFullPath[0]))
+        {
+            return childFullPath;
+        }
+
+        int commonLength = 0;
+        int lastSeparator = -1;
+        for (int i = 0; i < sourcePath.Length; i++)
+        {
+            if (i >= childFullPath.Length)
+            {
+                break;
+            }
+
+            if (sourcePath[i] != childFullPath[i])
+            {
+                break;
+            }
+
+            if (IsDirectorySeparator(sourcePath[i]))
+            {
+                lastSeparator = i;
+            }
+
+            commonLength++;
+        }
+
+        if (commonLength == 0)
+        {
+            return childFullPath;
+        }
+
+        if (commonLength == sourcePath.Length && commonLength == childFullPath.Length)
+        {
+            return ".";
+        }
+
+        if (commonLength == sourcePath.Length && IsDirectorySeparator(childFullPath[commonLength]))
+        {
+            return childFullPath.Substring(commonLength + 1);
+        }
+
+        var sb = new ValueStringBuilder(stackalloc char[260 /* PathInternal.MaxShortPath */]);
+        if (lastSeparator == -1)
+        {
+            sb.Append(childFullPath);
+        }
+        else
+        {
+            if (lastSeparator + 1 < sourcePath.Length)
+            {
+                sb.Append("..");
+                sb.Append(DirectorySeparatorChar);
+            }
+
+            sb.Append(childFullPath.AsSpan().Slice(lastSeparator + 1));
+        }
+
+        return sb.ToString();
+
     }
 }

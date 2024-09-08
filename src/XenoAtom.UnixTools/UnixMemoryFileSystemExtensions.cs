@@ -12,7 +12,7 @@ public static class UnixMemoryFileSystemExtensions
 {
     public static void ReadFrom(this UnixMemoryFileSystem fs, CpioReader reader) => fs.RootDirectory.ReadFrom(reader);
 
-    public static void ReadFrom(this UnixDirectory rootDirectory, CpioReader reader)
+    public static void ReadFrom(this UnixDirectory rootDirectory, CpioReader reader, bool overwrite = false)
     {
         rootDirectory.VerifyAttached();
         var fs = rootDirectory.FileSystem!;
@@ -20,8 +20,6 @@ public static class UnixMemoryFileSystemExtensions
         var inodes = new Dictionary<uint, UnixFileSystemEntry>();
         while (reader.TryGetNextEntry(out var entry))
         {
-            Console.WriteLine(entry.Name);
-
             var path = UnixPath.Normalize(UnixPath.Combine(rootDirectory.FullPath, entry.Name));
             UnixFileSystemEntry fsEntry;
 
@@ -45,6 +43,20 @@ public static class UnixMemoryFileSystemExtensions
                 }
                 else
                 {
+                    if (fs.TryGetEntry(path, out var previousEntry))
+                    {
+                        if (!overwrite)
+                        {
+                            throw new InvalidOperationException($"Entry already exists at path {path}");
+                        }
+
+                        // If the previous entry is not a directory, we can delete it
+                        if (previousEntry is not UnixDirectory)
+                        {
+                            previousEntry.Delete();
+                        }
+                    }
+                    
                     switch (entry.FileType)
                     {
                         case CpioFileType.Directory:
@@ -83,6 +95,8 @@ public static class UnixMemoryFileSystemExtensions
 
     public static void WriteTo(this UnixDirectory rootDirectory, CpioWriter writer)
     {
+        rootDirectory.VerifyAttached();
+
         var mapEntryToHardLinkCount = new Dictionary<UnixInode, uint>();
         var stack = new Stack<UnixFileSystemEntry>();
         var subEntries = new List<UnixFileSystemEntry>();
@@ -98,8 +112,6 @@ public static class UnixMemoryFileSystemExtensions
         while (stack.Count > 0)
         {
             var entry = stack.Pop();
-
-            Console.WriteLine(entry.FullPath);
 
             // For hardlinks, we need to keep track of the hardlink count
             // to write the content only once for the last hardlink

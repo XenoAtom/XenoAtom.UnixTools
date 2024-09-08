@@ -2,8 +2,6 @@
 // Licensed under the BSD-Clause 2 license.
 // See license.txt file in the project root for full license information.
 
-using XenoAtom.UnixTools;
-
 namespace XenoAtom.UnixTools.Tests;
 
 [TestClass]
@@ -61,8 +59,8 @@ public class TestFileSystem
         Assert.AreEqual(1U, linkFile1.HardLinkCount);
         Assert.AreEqual(2, dir1.Entries.Count);
 
-        var hardLink1 = dir1.CreateHardLink("file3", file1);
-        Assert.AreEqual("/dir1/file3", hardLink1.FullPath);
+        var hardLink1 = dir1.CreateHardLink("file3_hardlink_file1", file1);
+        Assert.AreEqual("/dir1/file3_hardlink_file1", hardLink1.FullPath);
         Assert.AreEqual(UnixFile.DefaultMode, hardLink1.Mode);
         Assert.AreEqual(UnixFileKind.RegularFile, hardLink1.FileKind);
         Assert.AreEqual(new DeviceId(0, 0), hardLink1.Dev);
@@ -93,13 +91,13 @@ public class TestFileSystem
         Assert.AreEqual("dir1", files[0].Name);
         Assert.AreEqual("file1", files[1].Name);
         Assert.AreEqual("file2", files[2].Name);
-        Assert.AreEqual("file3", files[3].Name);
+        Assert.AreEqual("file3_hardlink_file1", files[3].Name);
         Assert.AreEqual("subdir", files[4].Name);
 
         Assert.AreEqual("/dir1", files[0].FullPath);
         Assert.AreEqual("/dir1/file1", files[1].FullPath);
         Assert.AreEqual("/dir1/file2", files[2].FullPath);
-        Assert.AreEqual("/dir1/file3", files[3].FullPath);
+        Assert.AreEqual("/dir1/file3_hardlink_file1", files[3].FullPath);
         Assert.AreEqual("/dir1/subdir", files[4].FullPath);
     }
 
@@ -118,6 +116,92 @@ public class TestFileSystem
         Assert.IsFalse(dir1.IsAttached);
     }
 
+
+    [TestMethod]
+    public void TestMoveEntries()
+    {
+        var fs = CreateSimpleFileSystem();
+        fs.MoveEntry("/dir1", "/dir2");
+        
+        var dir2 = fs.GetEntry("/dir2") as UnixDirectory;
+        Assert.IsNotNull(dir2);
+
+        Assert.AreEqual(1, fs.RootDirectory.Entries.Count);
+        Assert.AreEqual(3U, fs.RootDirectory.HardLinkCount);
+
+        fs.MoveEntry("/dir2/file1", "/file.txt");
+        Assert.AreEqual(2, fs.RootDirectory.Entries.Count);
+        var file = fs.GetEntry("/file.txt") as UnixFile;
+        Assert.IsNotNull(file);
+        Assert.AreEqual(2U, file.HardLinkCount);
+        Assert.AreEqual("HelloWorld", file.ReadAllText());
+    }
+
+    [TestMethod]
+    public void TestCopyDirectory()
+    {
+        var fs = CreateSimpleFileSystem();
+        fs.CopyEntry("/dir1", "/dir2", UnixCopyMode.Archive);
+
+        var dir1 = fs.GetEntry("/dir1") as UnixDirectory;
+        Assert.IsNotNull(dir1);
+        var dir2 = fs.GetEntry("/dir2") as UnixDirectory;
+        Assert.IsNotNull(dir2);
+
+        Assert.AreEqual(2, fs.RootDirectory.Entries.Count);
+        Assert.AreEqual(4U, fs.RootDirectory.HardLinkCount);
+
+        Assert.AreEqual(4, dir1.Entries.Count);
+        Assert.AreEqual(3U, dir1.HardLinkCount);
+
+        Assert.AreEqual(4, dir2.Entries.Count);
+        Assert.AreEqual(3U, dir2.HardLinkCount);
+
+        var file1_dir1 = dir1.GetEntry("file1") as UnixFile;
+        Assert.IsNotNull(file1_dir1);
+
+        var file1_dir2 = dir2.GetEntry("file1") as UnixFile;
+        Assert.IsNotNull(file1_dir2);
+        Assert.AreEqual(2U, file1_dir1.HardLinkCount);
+        Assert.AreEqual(2U, file1_dir2.HardLinkCount);
+        Assert.AreEqual("HelloWorld", file1_dir1.ReadAllText());
+        Assert.AreEqual("HelloWorld", file1_dir2.ReadAllText());
+        var file3 = dir2.GetEntry("file3_hardlink_file1") as UnixFile;
+        Assert.IsNotNull(file3);
+        Assert.AreEqual(2U, file3.HardLinkCount);
+        Assert.AreEqual(file1_dir2.Inode, file3.Inode, "Inode are not matching");
+    }
+
+    [TestMethod]
+    public void TestCopyFile()
+    {
+        var fs = CreateSimpleFileSystem();
+        fs.CopyEntry("/dir1/file1", "/file.txt");
+
+        var file1 = fs.GetEntry("/dir1/file1") as UnixFile;
+        Assert.IsNotNull(file1);
+        var file2 = fs.GetEntry("/file.txt") as UnixFile;
+        Assert.IsNotNull(file2);
+
+        Assert.AreEqual("HelloWorld", file1.ReadAllText());
+        Assert.AreEqual("HelloWorld", file2.ReadAllText());
+    }
+
+    [TestMethod]
+    public void TestCopySymbolicLink()
+    {
+        var fs = CreateSimpleFileSystem();
+        fs.CopyEntry("/dir1/file2", "/file2");
+
+        var file1 = fs.GetEntry("/dir1/file1") as UnixFile;
+        Assert.IsNotNull(file1);
+        var file2 = fs.GetEntry("/file2") as UnixSymbolicLink;
+        Assert.IsNotNull(file2);
+
+        Assert.AreEqual("HelloWorld", file1.ReadAllText());
+        Assert.AreEqual("file1", file2.Target);
+    }
+
     [TestMethod]
     public void TestRemoveHardLinkFile()
     {
@@ -133,7 +217,7 @@ public class TestFileSystem
         Assert.AreEqual(3, dir1.Entries.Count);
         Assert.IsFalse(file1.IsAttached);
 
-        var file3 = dir1.GetEntry("file3") as UnixFile;
+        var file3 = dir1.GetEntry("file3_hardlink_file1") as UnixFile;
         Assert.IsNotNull(file3);
         Assert.AreEqual(1U, file3.HardLinkCount);
         Assert.IsTrue(file3.IsAttached);
@@ -146,7 +230,7 @@ public class TestFileSystem
         var dir1 = root.CreateDirectory("dir1");
         var file1 = dir1.CreateFile("file1", "HelloWorld");
         dir1.CreateSymbolicLink("file2", "file1");
-        dir1.CreateHardLink("file3", file1);
+        dir1.CreateHardLink("file3_hardlink_file1", file1);
         dir1.CreateDirectory("subdir");
         return fs;
     }

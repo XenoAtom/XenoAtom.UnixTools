@@ -13,7 +13,7 @@ namespace XenoAtom.UnixTools;
 public abstract class UnixFileSystemEntry
 {
     // ReSharper disable ConvertToAutoProperty
-    private readonly string _name;
+    private string _name;
     private readonly UnixInode _inode;
     private UnixDirectory? _parent;
     private UnixMemoryFileSystem? _fileSystem;
@@ -38,7 +38,6 @@ public abstract class UnixFileSystemEntry
     public UnixDirectory? Parent
     {
         get => _parent;
-        internal set => _parent = value;
     }
 
     /// <summary>
@@ -170,9 +169,10 @@ public abstract class UnixFileSystemEntry
     /// <exception cref="InvalidOperationException">If this is a root folder or the entry has been already deleted.</exception>
     public void Delete()
     {
+        VerifyAttached();
         if (this is UnixDirectory directory && directory.IsRoot) throw new InvalidOperationException("Cannot delete the root folder");
         if (!IsAttached) throw new InvalidOperationException("Cannot delete an entry already removed from a file system");
-        Parent!.RemoveEntry(Name);
+        Parent!.DeleteEntry(Name);
     }
 
     /// <summary>
@@ -193,6 +193,81 @@ public abstract class UnixFileSystemEntry
     public override string ToString()
     {
         return FullPath;
+    }
+
+    internal void SetParent(UnixDirectory? newParent, string? newName = null)
+    {
+        var previousParent = _parent;
+        newName ??= Name;
+        if (newParent == previousParent && newName == Name)
+        {
+            return;
+        }
+
+        if (newParent is null)
+        {
+            if (this is UnixDirectory directory)
+            {
+                foreach (var child in directory.Entries.ToList())
+                {
+                    child.SetParent(null);
+                }
+            }
+
+            FileSystem = null;
+        }
+        else
+        {
+            if (newParent.InternalEntries.ContainsKey(newName))
+            {
+                throw new InvalidOperationException($"An entry with the name `{newName}` already exists in the directory `{newParent.FullPath}`");
+            }
+        }
+
+
+
+        _parent = newParent;
+        FileSystem = newParent?.FileSystem;
+
+        if (previousParent is not null)
+        {
+            previousParent.InternalEntries.Remove(Name);
+
+            // Decrement the parent hardlink count if the entry is a directory
+            // because of the implicit `..` entry in the subdirectory
+            if (FileKind == UnixFileKind.Directory)
+            {
+                previousParent.Inode.HardLinkCount--;
+            }
+
+            // Decrease the hard link count
+            Inode.HardLinkCount--;
+
+            // If the hard link count is 0 or 1 (for directory), the node is not used anymore, so we can remove the inode from the filesystem
+            if (Inode.HardLinkCount == 0 || (FileKind == UnixFileKind.Directory && Inode.HardLinkCount == 1))
+            {
+                Inode.HardLinkCount = 0;
+            }
+        }
+
+        if (newParent is not null)
+        {
+            Inode.HardLinkCount++;
+            newParent.InternalEntries.Add(newName, this);
+            _name = newName;
+
+            // Increment the parent hardlink count if the entry is a directory
+            // because of the implicit `..` entry in the subdirectory
+            if (FileKind == UnixFileKind.Directory)
+            {
+                // For a directory, the initial hardlink count is 2 (one for the directory, one for `.`)
+                if (Inode.HardLinkCount == 1)
+                {
+                    Inode.HardLinkCount = 2;
+                }
+                newParent.Inode.HardLinkCount++;
+            }
+        }
     }
 
     /// <summary>
@@ -221,11 +296,4 @@ public abstract class UnixFileSystemEntry
             }
         }
     }
-
-    /// <summary>
-    /// Clones this entry with the specified name.
-    /// </summary>
-    /// <param name="name"></param>
-    /// <returns></returns>
-    internal abstract UnixFileSystemEntry CloneWithName(string name);
 }

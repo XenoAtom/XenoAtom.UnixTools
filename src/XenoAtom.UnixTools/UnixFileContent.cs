@@ -45,27 +45,6 @@ public readonly struct UnixFileContent
 
     public object? Data => _data;
 
-    public string AsString() => _data switch
-    {
-        string s => s,
-        Func<string> f => f(),
-        _ => throw new InvalidOperationException("Invalid kind")
-    };
-
-    public byte[] AsByteArray() => _data switch
-    {
-        byte[] b => b,
-        Func<byte[]> f => f(),
-        _ => throw new InvalidOperationException("Invalid kind")
-    };
-
-    public Stream AsStream() => _data switch
-    {
-        Stream s => s,
-        Func<Stream> f => f(),
-        _ => throw new InvalidOperationException("Invalid kind")
-    };
-    
     public void CopyTo(Stream stream, Encoding? encoding = null)
     {
         switch (_data)
@@ -109,6 +88,10 @@ public readonly struct UnixFileContent
                 s.CopyTo(stream);
                 break;
             }
+            case null:
+                break;
+            default:
+                throw new InvalidOperationException($"Invalid content kind: {Kind}");
         }
     }
 
@@ -155,7 +138,20 @@ public readonly struct UnixFileContent
                 await s.CopyToAsync(stream);
                 break;
             }
+            case null:
+                break;
+            default:
+                throw new InvalidOperationException($"Invalid content kind: {Kind}");
         }
+    }
+
+    internal UnixFileContent CreateCopy()
+    {
+        return _data switch
+        {
+            byte[] b => new UnixFileContent((byte[])b.Clone()),
+            _ => new UnixFileContent(_data)
+        };
     }
 
     public void Dispose()

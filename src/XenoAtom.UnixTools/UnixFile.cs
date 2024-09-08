@@ -4,8 +4,14 @@
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// A Unix file.
+/// </summary>
 public sealed class UnixFile : UnixFileSystemEntry
 {
+    /// <summary>
+    /// The default mode when creating a new file.
+    /// </summary>
     public const UnixFileMode DefaultMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
 
     internal UnixFile(string name, UnixInode node) : base(name, node)

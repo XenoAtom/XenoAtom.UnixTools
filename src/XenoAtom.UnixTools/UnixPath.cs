@@ -8,11 +8,29 @@ using System.Runtime.CompilerServices;
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// Unix path utilities, similar to <see cref="System.IO.Path"/> but with a unique support for Unix paths, the directory separator is always '/'.
+/// </summary>
 public static class UnixPath
 {
+    /// <summary>
+    /// Default directory separator character.
+    /// </summary>
     public const char DirectorySeparatorChar = '/';
+
+    /// <summary>
+    /// Default directory separator character as a string.
+    /// </summary>
     public const string DirectorySeparatorCharAsString = "/";
 
+    /// <summary>
+    /// Normalizes the given path.
+    /// </summary>
+    /// <param name="path">The path to normalize.</param>
+    /// <returns>The normalized path</returns>
+    /// <remarks>
+    /// This method will remove any relative segments (./, ../) from the path.
+    /// </remarks>
     public static string Normalize(string path)
     {
         Validate(path);
@@ -29,38 +47,34 @@ public static class UnixPath
         return directoryNameOffset < 0 ? ReadOnlySpan<char>.Empty : path.Slice(0, directoryNameOffset);
     }
 
-    internal static int GetDirectoryNameOffset(ReadOnlySpan<char> path)
-    {
-        int end = path.Length;
-        if (end <= 0)
-            return -1;
-
-        while (end > 0 && !IsDirectorySeparator(path[--end]))
-        {
-        }
-
-        // Trim off any remaining separators (to deal with C:\foo\\bar)
-        while (end > 0 && IsDirectorySeparator(path[end - 1]))
-        {
-            end--;
-        }
-
-        return end;
-    }
-    
+    /// <summary>
+    /// Gets the file name and extension for the specified path represented by a character span.
+    /// </summary>
+    /// <param name="path">The path to retrieve the file name and extension from.</param>
+    /// <returns>The characters at the end of the path that represents the file name and extension.</returns>
     public static ReadOnlySpan<char> GetFileName(ReadOnlySpan<char> path)
     {
         int index = path.LastIndexOf('/');
         return index < 0 ? path : path.Slice(index + 1);
     }
-    
+
+    /// <summary>
+    /// Gets the file name without the extension for the specified path represented by a character span.
+    /// </summary>
+    /// <param name="path">The path to retrieve the file name without the extension.</param>
+    /// <returns>The characters at the end of the path that represents the file name without the extension.</returns>
     public static ReadOnlySpan<char> GetFileNameWithoutExtension(ReadOnlySpan<char> path)
     {
         ReadOnlySpan<char> fileName = GetFileName(path);
         int length = fileName.LastIndexOf('.');
         return length < 0 ? fileName : fileName.Slice(0, length);
     }
-    
+
+    /// <summary>
+    /// Gets the extension for the specified path represented by a character span.
+    /// </summary>
+    /// <param name="path">The path to retrieve the extension from.</param>
+    /// <returns>The characters at the end of the path that represents the extension.</returns>
     public static ReadOnlySpan<char> GetExtension(ReadOnlySpan<char> path)
     {
         int length = path.Length;
@@ -75,8 +89,20 @@ public static class UnixPath
         return ReadOnlySpan<char>.Empty;
     }
 
+    /// <summary>
+    /// Validates the given Unix path.
+    /// </summary>
+    /// <param name="path">The path to validate.</param>
+    /// <remarks>
+    /// This method will throw an <see cref="ArgumentNullException"/> if the path is null or contains invalid null characters.
+    /// </remarks>
     public static void Validate(string path) => Validate(path, nameof(path));
 
+    /// <summary>
+    /// Validates the given Unix path.
+    /// </summary>
+    /// <param name="path">The path to validate.</param>
+    /// <param name="paramName">The name of the parameter in case of throwing an exception.</param>
     public static void Validate(string path, string paramName)
     {
         ArgumentNullException.ThrowIfNull(path, paramName);
@@ -85,6 +111,11 @@ public static class UnixPath
             throw new ArgumentException("Invalid null char found in path", paramName);
     }
 
+    /// <summary>
+    /// Validates the given Unix path.
+    /// </summary>
+    /// <param name="path">The path to validate.</param>
+    /// <param name="paramName">The name of the parameter in case of throwing an exception.</param>
     public static void Validate(ReadOnlySpan<char> path, string paramName)
     {
         if (ContainsInvalidCharacters(path))
@@ -97,10 +128,21 @@ public static class UnixPath
     /// <param name="path">The path to check</param>
     /// <returns>True if the path contains valid characters.</returns>
     public static bool ContainsInvalidCharacters(ReadOnlySpan<char> path) => path.IndexOf('\0') >= 0;
-    
+
+    /// <summary>
+    /// Checks if a character is the directory '/' separator.
+    /// </summary>
+    /// <param name="c">The character to check.</param>
+    /// <returns>True if the character is the directory separator.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsDirectorySeparator(char c) => c == DirectorySeparatorChar;
 
+    /// <summary>
+    /// Combines two paths.
+    /// </summary>
+    /// <param name="path1">The first path to combine.</param>
+    /// <param name="path2">The second path to combine.</param>
+    /// <returns>The combined path</returns>
     public static string Combine(string path1, string path2)
     {
         Validate(path1);
@@ -191,9 +233,13 @@ public static class UnixPath
 
         return builder.ToString();
     }
+    
 
-
-
+    /// <summary>
+    /// Checks if the path is absolute/rooted.
+    /// </summary>
+    /// <param name="path">The path to check.</param>
+    /// <returns>True if the path is absolute/rooted.</returns>
     public static bool IsPathRooted(ReadOnlySpan<char> path) => path.Length > 0 && path[0] == '/';
 
     internal static string NormalizeInternal(string path)
@@ -325,6 +371,12 @@ public static class UnixPath
         return true;
     }
 
+    /// <summary>
+    /// Gets the relative path from a source path to a child path.
+    /// </summary>
+    /// <param name="sourcePath">The source path</param>
+    /// <param name="childFullPath">The child full path</param>
+    /// <returns>The relative path from the source path to the child path</returns>
     public static string GetRelativePath(string sourcePath, string childFullPath)
     {
         Validate(sourcePath, nameof(sourcePath));
@@ -406,4 +458,24 @@ public static class UnixPath
         return sb.ToString();
 
     }
+
+    internal static int GetDirectoryNameOffset(ReadOnlySpan<char> path)
+    {
+        int end = path.Length;
+        if (end <= 0)
+            return -1;
+
+        while (end > 0 && !IsDirectorySeparator(path[--end]))
+        {
+        }
+
+        // Trim off any remaining separators (to deal with C:\foo\\bar)
+        while (end > 0 && IsDirectorySeparator(path[end - 1]))
+        {
+            end--;
+        }
+
+        return end;
+    }
+
 }

@@ -115,7 +115,7 @@ public sealed class UnixInode
         _deviceId = id;
     }
 
-    internal UnixInode CreateCopy(UnixMemoryFileSystem fs)
+    internal UnixInode CreateCopy(UnixInMemoryFileSystem fs)
     {
         object? content = FileKind switch
         {

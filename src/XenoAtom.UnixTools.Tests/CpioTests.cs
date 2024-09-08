@@ -49,7 +49,7 @@ public class CpioTests
         var fileStream = new MemoryStream(File.ReadAllBytes(@"cpio_archive_test.cpio"));
         var fileStreamOut = new MemoryStream();
 
-        var fs = new UnixMemoryFileSystem();
+        var fs = new UnixInMemoryFileSystem();
         var entries = new List<CpioEntry>();
 
         // Use a block to dispose the reader/writer
@@ -121,6 +121,7 @@ public class CpioTests
             Assert.AreEqual(entry.HardLinkCount, entryOut.HardLinkCount, "Invalid hard link count");
             Assert.AreEqual(entry.Device, entryOut.Device, "Invalid device");
             Assert.AreEqual(entry.ModificationTime, entryOut.ModificationTime, "Invalid modification time");
+            Assert.AreEqual(entry.Checksum, entryOut.Checksum, "Invalid checksum");
 
             Assert.AreEqual(entry.LinkName, entryOut.LinkName, "Invalid link name");
 

@@ -38,11 +38,6 @@ public sealed unsafe class CpioReader : IDisposable
     }
 
     /// <summary>
-    /// Gets the underlying stream.
-    /// </summary>
-    public Stream Stream => _stream;
-
-    /// <summary>
     /// Tries to get the next entry from the CPIO archive.
     /// </summary>
     /// <param name="entry">The output entry parsed from the archive.</param>

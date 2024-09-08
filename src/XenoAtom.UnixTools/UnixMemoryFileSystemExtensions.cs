@@ -8,10 +8,24 @@ using System.Text;
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// Extensions for <see cref="UnixInMemoryFileSystem"/>.
+/// </summary>
 public static class UnixMemoryFileSystemExtensions
 {
-    public static void ReadFrom(this UnixMemoryFileSystem fs, CpioReader reader) => fs.RootDirectory.ReadFrom(reader);
+    /// <summary>
+    /// Reads the content of a CPIO archive into this file system.
+    /// </summary>
+    /// <param name="fs">The filesystem to read the archive.</param>
+    /// <param name="reader">The CPIO reader.</param>
+    public static void ReadFrom(this UnixInMemoryFileSystem fs, CpioReader reader) => fs.RootDirectory.ReadFrom(reader);
 
+    /// <summary>
+    /// Reads the content of a CPIO archive into this directory.
+    /// </summary>
+    /// <param name="rootDirectory">The root directory to read the archive.</param>
+    /// <param name="reader">The CPIO reader.</param>
+    /// <param name="overwrite">A boolean indicating whether existing entries should be overwritten.</param>
     public static void ReadFrom(this UnixDirectory rootDirectory, CpioReader reader, bool overwrite = false)
     {
         rootDirectory.VerifyAttached();
@@ -91,8 +105,18 @@ public static class UnixMemoryFileSystemExtensions
         }
     }
 
-    public static void WriteTo(this UnixMemoryFileSystem fs, CpioWriter writer) => fs.RootDirectory.WriteTo(writer);
+    /// <summary>
+    /// Writes the content of this file system to a CPIO archive.
+    /// </summary>
+    /// <param name="fs">The filesystem to create the archive from.</param>
+    /// <param name="writer">The CPIO writer receiving the archive.</param>
+    public static void WriteTo(this UnixInMemoryFileSystem fs, CpioWriter writer) => fs.RootDirectory.WriteTo(writer);
 
+    /// <summary>
+    /// Writes the content of this directory to a CPIO archive.
+    /// </summary>
+    /// <param name="rootDirectory">The root directory to create the archive from.</param>
+    /// <param name="writer">The CPIO writer receiving the archive.</param>
     public static void WriteTo(this UnixDirectory rootDirectory, CpioWriter writer)
     {
         rootDirectory.VerifyAttached();

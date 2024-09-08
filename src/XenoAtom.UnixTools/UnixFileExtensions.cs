@@ -6,14 +6,31 @@ using System.Text;
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// Defines extension methods for <see cref="UnixFile"/>.
+/// </summary>
 public static class UnixFileExtensions
 {
-    public static byte[] ReadAllBytes(this UnixFileContent content)
+    /// <summary>
+    /// Reads all the bytes from the content of this file.
+    /// </summary>
+    /// <param name="content">The Unix content of this file.</param>
+    /// <param name="encoding">The encoding to use to convert string content.</param>
+    /// <returns>The content as a byte array.</returns>
+    public static byte[] ReadAllBytes(this UnixFileContent content, Encoding? encoding = null)
     {
         var stream = new MemoryStream();
-        content.CopyTo(stream);
+        encoding ??= Encoding.UTF8;
+        content.CopyTo(stream, encoding);
         return stream.ToArray();
     }
+
+    /// <summary>
+    /// Reads all the text from the content of this file.
+    /// </summary>
+    /// <param name="content">The Unix content of this file.</param>
+    /// <param name="encoding">The encoding to use to convert string content.</param>
+    /// <returns>The content as a text.</returns>
     public static string ReadAllText(this UnixFileContent content, Encoding? encoding = null)
     {
         encoding ??= Encoding.UTF8;
@@ -22,7 +39,19 @@ public static class UnixFileExtensions
         return encoding.GetString(stream.ToArray());
     }
 
-    public static byte[] ReadAllBytes(this UnixFile file) => file.Content.ReadAllBytes();
+    /// <summary>
+    /// Reads all the bytes from the content of this file.
+    /// </summary>
+    /// <param name="file">The Unix file.</param>
+    /// <param name="encoding">The encoding to use to convert string content.</param>
+    /// <returns>The content as a byte array.</returns>
+    public static byte[] ReadAllBytes(this UnixFile file, Encoding? encoding = null) => file.Content.ReadAllBytes(encoding);
 
+    /// <summary>
+    /// Reads all the text from the content of this file.
+    /// </summary>
+    /// <param name="file">The Unix file.</param>
+    /// <param name="encoding">The encoding to use to convert string content.</param>
+    /// <returns>The content as a text.</returns>
     public static string ReadAllText(this UnixFile file, Encoding? encoding = null) => file.Content.ReadAllText(encoding);
 }

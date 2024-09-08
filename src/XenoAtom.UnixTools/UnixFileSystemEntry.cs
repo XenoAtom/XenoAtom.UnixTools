@@ -16,7 +16,7 @@ public abstract class UnixFileSystemEntry
     private string _name;
     private readonly UnixInode _inode;
     private UnixDirectory? _parent;
-    private UnixMemoryFileSystem? _fileSystem;
+    private UnixInMemoryFileSystem? _fileSystem;
 
     internal UnixFileSystemEntry(string name, UnixInode node)
     {
@@ -71,7 +71,7 @@ public abstract class UnixFileSystemEntry
     /// <summary>
     /// Gets the file system associated to this entry.
     /// </summary>
-    public UnixMemoryFileSystem? FileSystem
+    public UnixInMemoryFileSystem? FileSystem
     {
         get => _fileSystem;
         internal set => _fileSystem = value;

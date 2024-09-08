@@ -4,6 +4,9 @@
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// Extensions for <see cref="CpioEntry"/>.
+/// </summary>
 public static class CpioEntryExtensions
 {
     /// <summary>

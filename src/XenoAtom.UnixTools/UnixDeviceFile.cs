@@ -4,6 +4,9 @@
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// A Unix device file.
+/// </summary>
 public sealed class UnixDeviceFile : UnixFileSystemEntry
 {
     internal UnixDeviceFile(string name, UnixInode node) : base(name, node)

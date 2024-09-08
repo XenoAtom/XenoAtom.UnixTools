@@ -11,7 +11,7 @@ using System.Text;
 namespace XenoAtom.UnixTools;
 
 /// <summary>
-/// Provides a raw writer for CPIO archives. For a higher level API, use <see cref="CpioFileSystemBuilder"/>.
+/// Provides a raw writer for CPIO archives. For a higher level API, use <see cref="UnixInMemoryFileSystem"/> and <see cref="UnixMemoryFileSystemExtensions.WriteTo(XenoAtom.UnixTools.UnixInMemoryFileSystem,XenoAtom.UnixTools.CpioWriter)"/>.
 /// </summary>
 public sealed unsafe class CpioWriter : IDisposable
 {
@@ -38,11 +38,6 @@ public sealed unsafe class CpioWriter : IDisposable
         _tempBuffer = ArrayPool<byte>.Shared.Rent(1024); // Allocate enough space to fit by default the headers, the UTF8 name and the UTF8 link name with padding.
         _positionInSuperStream = stream.CanSeek ? stream.Position : 0;
     }
-
-    /// <summary>
-    /// Gets the underlying stream.
-    /// </summary>
-    public Stream Stream => _stream;
 
     /// <summary>
     /// Adds a new entry to the CPIO archive.

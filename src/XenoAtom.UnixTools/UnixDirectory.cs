@@ -11,22 +11,40 @@ using System.Runtime.InteropServices;
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// A Unix directory.
+/// </summary>
 public sealed class UnixDirectory : UnixFileSystemEntry
 {
     private const int MaximumPathDepth = 2048;
 
+    /// <summary>
+    /// The default mode used when creating a directory.
+    /// </summary>
     public const UnixFileMode DefaultMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
     
     internal UnixDirectory(string name, UnixInode node) : base(name, node)
     {
     }
-    
+
+    /// <summary>
+    /// Gets a boolean indicating whether this directory is the root directory.
+    /// </summary>
     public bool IsRoot => Parent == null && Name.Length == 0;
 
+    /// <summary>
+    /// Gets the entries of this directory.
+    /// </summary>
     public SortedDictionary<string, UnixFileSystemEntry>.ValueCollection Entries => InternalEntries.Values;
 
     internal SortedDictionary<string, UnixFileSystemEntry> InternalEntries => Inode.GetDictionaryContent();
-    
+
+    /// <summary>
+    /// Creates a file in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <returns>The created entry.</returns>
     public UnixFile CreateFile(string path, bool createIntermediateDirectories = false)
     {
         var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
@@ -35,6 +53,13 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return file;
     }
 
+    /// <summary>
+    /// Creates a file in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="content">The content of the file.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <returns>The created entry.</returns>
     public UnixFile CreateFile(string path, UnixFileContent content, bool createIntermediateDirectories = false)
     {
         var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
@@ -44,6 +69,12 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return file;
     }
 
+    /// <summary>
+    /// Creates a directory in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <returns>The created entry.</returns>
     public UnixDirectory CreateDirectory(string path, bool createIntermediateDirectories = false) 
     {
         var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
@@ -53,6 +84,15 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return directory;
     }
 
+    /// <summary>
+    /// Creates a device file in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="kind">The kind of device file. The value must be <see cref="UnixFileKind.CharacterSpecialDevice"/> or <see cref="UnixFileKind.BlockSpecialDevice"/></param>
+    /// <param name="id">The device id.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <returns>The created entry.</returns>
+    /// <exception cref="ArgumentException">If <paramref name="kind"/> is not <see cref="UnixFileKind.CharacterSpecialDevice"/> or <see cref="UnixFileKind.BlockSpecialDevice"/>.</exception>
     public UnixDeviceFile CreateDevice(string path, UnixFileKind kind, DeviceId id, bool createIntermediateDirectories = false)
     {
         if (kind != UnixFileKind.CharacterSpecialDevice && kind != UnixFileKind.BlockSpecialDevice)
@@ -69,16 +109,33 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return device;
     }
 
+    /// <summary>
+    /// Creates a symbolic link in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="target">The target of the symbolic link.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <returns>The created entry.</returns>
     public UnixSymbolicLink CreateSymbolicLink(string path, string target, bool createIntermediateDirectories = false)
     {
         var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
         // A symbolic link doesn't check if the target exists
+        UnixPath.Validate(target, nameof(target));
+        target = UnixPath.Normalize(target); // Make sure that the link is noramlized
         var node = CreateNode(UnixFileKind.SymbolicLink, target);
         var link = new UnixSymbolicLink(name!, node);
         dir.AddEntry(link);
         return link;
     }
 
+    /// <summary>
+    /// Creates a hard link in this directory.
+    /// </summary>
+    /// <typeparam name="TEntry"></typeparam>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="target">The target of this hardlink.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <returns>The created entry.</returns>
     public TEntry CreateHardLink<TEntry>(string path, TEntry target, bool createIntermediateDirectories = false) where TEntry: UnixFileSystemEntry
     {
         var (dir, name) = ResolveEntryForCreate(path, createIntermediateDirectories);
@@ -87,11 +144,22 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return link;
     }
 
+    /// <summary>
+    /// Checks if an entry exists in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <returns>A boolean indicating whether the entry exists.</returns>
     public bool ContainsEntry(string path)
     {
         return TryGetEntry(path, out _);
     }
 
+    /// <summary>
+    /// Tries to get an entry in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <param name="entry">The entry if found.</param>
+    /// <returns>A boolean indicating whether the entry was found.</returns>
     public bool TryGetEntry(string path, [NotNullWhen(true)] out UnixFileSystemEntry? entry)
     {
         var dir = this;
@@ -106,8 +174,19 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return dir.InternalEntries.TryGetValue(name!, out entry);
     }
 
+    /// <summary>
+    /// Gets an entry in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <returns>The entry found.</returns>
     public UnixFileSystemEntry this[string path] => GetEntry(path);
 
+    /// <summary>
+    /// Gets an entry in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <returns>The entry found.</returns>
+    /// <exception cref="ArgumentException">If the entry does not exist.</exception>
     public UnixFileSystemEntry GetEntry(string path)
     {
         if (!TryGetEntry(path, out var entry))
@@ -117,6 +196,17 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         return entry;
     }
 
+    /// <summary>
+    /// Copies an entry to a destination path.
+    /// </summary>
+    /// <param name="sourcePath">The source path relative to this directory.</param>
+    /// <param name="destinationPath">The destination path relative to this directory.</param>
+    /// <param name="mode">The copy mode.</param>
+    /// <param name="overwrite">A boolean indicating whether to overwrite the destination entry if it already exists.</param>
+    /// <exception cref="ArgumentException">If the source path does not exist.</exception>
+    /// <remarks>
+    /// If the destination path is a directory, the source entry is copied into it.
+    /// </remarks>
     public void CopyEntry(string sourcePath, string destinationPath, UnixCopyMode mode = UnixCopyMode.Single, bool overwrite = false)
     {
         VerifyAttached();
@@ -218,6 +308,17 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         }
     }
 
+    /// <summary>
+    /// Moves an entry to a destination path.
+    /// </summary>
+    /// <param name="sourcePath">The source path relative to this directory.</param>
+    /// <param name="destinationPath">The destination path relative to this directory.</param>
+    /// <param name="createIntermediateDirectories">A boolean indicating whether intermediate directories should be created.</param>
+    /// <param name="overwrite">A boolean indicating whether to overwrite the destination entry if it already exists.</param>
+    /// <exception cref="ArgumentException">If the source path does not exist.</exception>
+    /// <remarks>
+    /// If the destination path is a directory, the source entry is moved into it.
+    /// </remarks>
     public void MoveEntry(string sourcePath, string destinationPath, bool createIntermediateDirectories = false, bool overwrite = false)
     {
         VerifyAttached();
@@ -271,6 +372,11 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         sourceEntry.SetParent(destinationDirectory, destinationName!);
     }
 
+    /// <summary>
+    /// Deletes an entry in this directory.
+    /// </summary>
+    /// <param name="path">A path relative to this directory.</param>
+    /// <exception cref="InvalidOperationException">If the entry is the root directory.</exception>
     public void DeleteEntry(string path)
     {
         var entry = GetEntry(path);
@@ -281,6 +387,11 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         entry.SetParent(null);
     }
 
+    /// <summary>
+    /// Enumerates the file system entries in this directory.
+    /// </summary>
+    /// <param name="searchOption">The search option.</param>
+    /// <returns>An enumeration of file system entries.</returns>
     public IEnumerable<UnixFileSystemEntry> EnumerateFileSystemEntries(SearchOption searchOption = SearchOption.TopDirectoryOnly)
     {
         if (searchOption == SearchOption.TopDirectoryOnly)
@@ -306,6 +417,12 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         }
     }
 
+    /// <summary>
+    /// Enumerates the file system entries in this directory.
+    /// </summary>
+    /// <param name="searchPattern">The search pattern.</param>
+    /// <param name="searchOption">The search option.</param>
+    /// <returns>An enumeration of file system entries.</returns>
     public IEnumerable<UnixFileSystemEntry> EnumerateFileSystemEntries(string searchPattern, SearchOption searchOption = SearchOption.TopDirectoryOnly)
     {
         // Make a copy (to allow adding/removing entries while iterating)
@@ -540,7 +657,7 @@ public sealed class UnixDirectory : UnixFileSystemEntry
         throw new ArgumentException($"An entry with the name `{name}` already exists in the directory `{directory.FullPath}`");
     }
 
-    internal static UnixDirectory CreateRoot(UnixMemoryFileSystem fs)
+    internal static UnixDirectory CreateRoot(UnixInMemoryFileSystem fs)
     {
         var node = new UnixInode(0, UnixFileKind.Directory, new SortedDictionary<string, UnixFileSystemEntry>(StringComparer.Ordinal))
         {

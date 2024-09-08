@@ -10,7 +10,7 @@ public class TestFileSystem
     [TestMethod]
     public void TestSimple()
     {
-        var fs = new UnixMemoryFileSystem();
+        var fs = new UnixInMemoryFileSystem();
         var root = fs.RootDirectory;
         Assert.IsTrue(root.IsRoot);
         Assert.AreEqual("/", root.FullPath);
@@ -222,10 +222,10 @@ public class TestFileSystem
         Assert.AreEqual(1U, file3.HardLinkCount);
         Assert.IsTrue(file3.IsAttached);
     }
-    
-    private static UnixMemoryFileSystem CreateSimpleFileSystem()
+
+    private static UnixInMemoryFileSystem CreateSimpleFileSystem()
     {
-        var fs = new UnixMemoryFileSystem();
+        var fs = new UnixInMemoryFileSystem();
         var root = fs.RootDirectory;
         var dir1 = root.CreateDirectory("dir1");
         var file1 = dir1.CreateFile("file1", "HelloWorld");

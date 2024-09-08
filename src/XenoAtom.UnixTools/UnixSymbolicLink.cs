@@ -4,6 +4,9 @@
 
 namespace XenoAtom.UnixTools;
 
+/// <summary>
+/// A Unix symbolic link.
+/// </summary>
 public sealed class UnixSymbolicLink : UnixFileSystemEntry
 {
     /// <summary>
@@ -18,14 +21,20 @@ public sealed class UnixSymbolicLink : UnixFileSystemEntry
         Mode = DefaultMode;
     }
 
+    /// <summary>
+    /// Gets or sets the relative target path of the symbolic link.
+    /// </summary>
     public string Target
     {
         get => Inode.GetSymbolicLinkTarget();
         set => Inode.SetSymbolicLinkTarget(value);
     }
 
+    /// <summary>
+    /// Gets the full path of the target of this symbolic link.
+    /// </summary>
     public string TargetFullPath
     {
-        get => Parent is null ? "<undefined>" : UnixPath.Combine(Parent!.FullPath, Target);
+        get => IsAttached ? UnixPath.Combine(Parent!.FullPath, Target) : "<undefined>";
     }
 }

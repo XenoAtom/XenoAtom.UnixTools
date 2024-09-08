@@ -11,14 +11,14 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Description>This is a default project description</Description>
+    <Description>This project provides a set of Unix tools for .NET 8.0+.</Description>
     <Copyright>Alexandre Mutel</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Authors>Alexandre Mutel</Authors>
-    <PackageTags>tag1;tag2;tag3</PackageTags>
+    <PackageTags>unix;cpio</PackageTags>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <PackageIcon>XenoAtom.UnixTools.png</PackageIcon>
-    <PackageProjectUrl>https://github.com/xoofx/XenoAtom.UnixTools</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/XenoAtom/XenoAtom.UnixTools</PackageProjectUrl>
     <PackageLicenseExpression>BSD-2-Clause</PackageLicenseExpression>
     <!--Add support for sourcelink-->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
